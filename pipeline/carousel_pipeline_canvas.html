@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pipeline Canvas — Dr. Paulo Carrossel</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700;800&display=swap');
+
+  :root {
+    --bg: #0a0a0a;
+    --bg2: #111111;
+    --bg3: #1a1a1a;
+    --border: #2a2a2a;
+    --border2: #3a3a3a;
+    --gold: #C8922A;
+    --gold2: #E8B04A;
+    --white: #f0ece4;
+    --muted: #666;
+    --muted2: #444;
+    --green: #4a9e6a;
+    --blue: #4a7eb5;
+    --purple: #7a5ab5;
+    --red: #c24a4a;
+    --node-w: 240px;
+    --font-ui: 'Syne', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--white);
+    font-family: var(--font-ui);
+    overflow: hidden;
+    height: 100vh;
+    user-select: none;
+  }
+
+  /* TOPBAR */
+  #topbar {
+    position: fixed; top: 0; left: 0; right: 0;
+    height: 48px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center;
+    padding: 0 16px; gap: 16px;
+    z-index: 1000;
+  }
+  #topbar .logo {
+    font-size: 13px; font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-right: 8px;
+  }
+  #topbar .sep { width: 1px; height: 20px; background: var(--border); }
+  .tb-btn {
+    font-family: var(--font-ui);
+    font-size: 11px; font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 5px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+  .tb-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .tb-btn.run {
+    border-color: var(--gold);
+    color: var(--bg);
+    background: var(--gold);
+    font-weight: 700;
+  }
+  .tb-btn.run:hover { background: var(--gold2); }
+  .tb-btn.run.running { background: var(--green); border-color: var(--green); }
+
+  #topbar .spacer { flex: 1; }
+  #status-bar {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  /* CANVAS */
+  #canvas-wrap {
+    position: fixed;
+    top: 48px; left: 0; right: 0; bottom: 0;
+    overflow: hidden;
+    cursor: default;
+  }
+  #canvas {
+    position: absolute;
+    width: 4000px; height: 3000px;
+    transform-origin: 0 0;
+  }
+
+  /* GRID BG */
+  #canvas-wrap {
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 40px 40px;
+    background-position: 0 0;
+  }
+
+  /* SVG WIRES */
+  #wires {
+    position: absolute;
+    top: 0; left: 0;
+    width: 4000px; height: 3000px;
+    pointer-events: none;
+  }
+
+  /* NODES */
+  .node {
+    position: absolute;
+    width: var(--node-w);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: move;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    z-index: 10;
+  }
+  .node:hover { border-color: var(--border2); }
+  .node.active { border-color: var(--gold) !important; z-index: 20; }
+  .node.running { border-color: var(--green); box-shadow: 0 0 16px rgba(74,158,106,0.2); }
+  .node.done { border-color: var(--green); }
+  .node.error { border-color: var(--red); }
+
+  .node-header {
+    padding: 10px 12px 8px;
+    border-bottom: 1px solid var(--border);
+    border-radius: 10px 10px 0 0;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .node-icon {
+    width: 22px; height: 22px;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .node-titles { flex: 1; min-width: 0; }
+  .node-type {
+    font-size: 8px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-bottom: 1px;
+  }
+  .node-name {
+    font-size: 12px; font-weight: 600;
+    color: var(--white);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .node-status {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted2); flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  .node.running .node-status { background: var(--green); animation: pulse 1s infinite; }
+  .node.done .node-status { background: var(--green); }
+  .node.error .node-status { background: var(--red); }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .node-body { padding: 10px 12px; }
+
+  /* PORTS */
+  .port-row {
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 6px; position: relative;
+  }
+  .port-row:last-child { margin-bottom: 0; }
+  .port-row.out { justify-content: flex-end; }
+
+  .port {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 2px solid;
+    cursor: crosshair;
+    flex-shrink: 0;
+    transition: transform 0.1s, background 0.1s;
+    z-index: 5;
+    position: relative;
+  }
+  .port:hover { transform: scale(1.5); }
+  .port.in { margin-left: -18px; }
+  .port.out { margin-right: -18px; }
+
+  .port-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  /* PORT COLORS */
+  .port-text   { border-color: var(--blue);   }
+  .port-json   { border-color: var(--gold);   }
+  .port-image  { border-color: var(--purple); }
+  .port-signal { border-color: var(--green);  }
+  .port-audio  { border-color: var(--red);    }
+
+  .port-text.connected   { background: var(--blue);   }
+  .port-json.connected   { background: var(--gold);   }
+  .port-image.connected  { background: var(--purple); }
+  .port-signal.connected { background: var(--green);  }
+  .port-audio.connected  { background: var(--red);    }
+
+  /* INPUT FIELDS */
+  .node-field {
+    margin-top: 8px;
+  }
+  .node-field label {
+    font-size: 9px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--muted); display: block; margin-bottom: 4px;
+  }
+  .node-field textarea,
+  .node-field input,
+  .node-field select {
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    color: var(--white);
+    padding: 6px 8px;
+    resize: none;
+    outline: none;
+    transition: border-color 0.15s;
+    cursor: text;
+  }
+  .node-field textarea:focus,
+  .node-field input:focus,
+  .node-field select:focus { border-color: var(--gold); }
+  .node-field select { cursor: pointer; }
+
+  /* OUTPUT PREVIEW */
+  .node-preview {
+    margin-top: 8px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 8px;
+    font-family: var(--font-mono);
+    font-size: 9px;
+    color: var(--muted);
+    min-height: 32px;
+    max-height: 80px;
+    overflow: hidden;
+    line-height: 1.5;
+  }
+  .node-preview.has-data { color: var(--gold2); }
+
+  /* EXECUTE BTN */
+  .node-run-btn {
+    margin-top: 8px;
+    width: 100%;
+    font-family: var(--font-ui);
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 6px;
+    border-radius: 5px;
+    border: 1px solid var(--border2);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .node-run-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(200,146,42,0.08); }
+  .node-run-btn.running { border-color: var(--green); color: var(--green); }
+
+  /* CATEGORY COLORS */
+  .cat-input .node-header { border-bottom-color: rgba(74,126,181,0.3); }
+  .cat-input .node-icon { background: rgba(74,126,181,0.15); color: var(--blue); }
+  .cat-input .node-type { color: var(--blue); }
+
+  .cat-ai .node-header { border-bottom-color: rgba(200,146,42,0.3); }
+  .cat-ai .node-icon { background: rgba(200,146,42,0.15); color: var(--gold); }
+  .cat-ai .node-type { color: var(--gold); }
+
+  .cat-design .node-header { border-bottom-color: rgba(122,90,181,0.3); }
+  .cat-design .node-icon { background: rgba(122,90,181,0.15); color: var(--purple); }
+  .cat-design .node-type { color: var(--purple); }
+
+  .cat-control .node-header { border-bottom-color: rgba(100,100,100,0.3); }
+  .cat-control .node-icon { background: rgba(100,100,100,0.15); color: var(--muted); }
+  .cat-control .node-type { color: var(--muted); }
+
+  .cat-publish .node-header { border-bottom-color: rgba(74,158,106,0.3); }
+  .cat-publish .node-icon { background: rgba(74,158,106,0.15); color: var(--green); }
+  .cat-publish .node-type { color: var(--green); }
+
+  /* WIRE */
+  .wire { fill: none; stroke-width: 2; opacity: 0.7; stroke-linecap: round; }
+  .wire-text   { stroke: var(--blue);   }
+  .wire-json   { stroke: var(--gold);   }
+  .wire-image  { stroke: var(--purple); }
+  .wire-signal { stroke: var(--green);  }
+  .wire-audio  { stroke: var(--red);    }
+  .wire.active { opacity: 1; stroke-width: 2.5; }
+  .wire.animated {
+    stroke-dasharray: 8 4;
+    animation: flow 0.8s linear infinite;
+  }
+  @keyframes flow { to { stroke-dashoffset: -12; } }
+
+  /* SIDEBAR */
+  #sidebar {
+    position: fixed;
+    right: 0; top: 48px; bottom: 0;
+    width: 280px;
+    background: var(--bg2);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    z-index: 100;
+    transform: translateX(100%);
+    transition: transform 0.2s;
+  }
+  #sidebar.open { transform: translateX(0); }
+  #sidebar-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #sidebar-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
+  #sidebar-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; }
+  #sidebar-content { flex: 1; overflow-y: auto; padding: 12px; }
+  #sidebar-content h3 { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin: 12px 0 6px; }
+  #sidebar-content h3:first-child { margin-top: 0; }
+
+  .output-display {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--gold2);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .slide-thumb {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    aspect-ratio: 4/5;
+    display: flex; flex-direction: column;
+    padding: 12px;
+    margin-bottom: 8px;
+    font-size: 10px;
+  }
+  .slide-thumb .s-label { font-size: 8px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); margin-bottom: 6px; }
+  .slide-thumb .s-title { font-size: 14px; font-weight: 800; color: var(--white); line-height: 1.2; text-transform: uppercase; flex: 1; }
+  .slide-thumb .s-body { font-size: 8px; color: var(--muted); line-height: 1.5; margin-top: 6px; }
+
+  /* MINIMAP */
+  #minimap {
+    position: fixed;
+    bottom: 16px; left: 16px;
+    width: 140px; height: 90px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    z-index: 100;
+  }
+  #minimap canvas { width: 100%; height: 100%; }
+
+  /* TOOLTIP */
+  .tooltip {
+    position: fixed;
+    background: var(--bg3);
+    border: 1px solid var(--border2);
+    border-radius: 5px;
+    padding: 5px 10px;
+    font-size: 10px;
+    color: var(--white);
+    pointer-events: none;
+    z-index: 2000;
+    display: none;
+  }
+
+  /* CONTEXT MENU */
+  #ctx-menu {
+    position: fixed;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 4px;
+    z-index: 2000;
+    display: none;
+    min-width: 160px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  .ctx-item {
+    padding: 7px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 5px;
+    color: var(--white);
+    display: flex; align-items: center; gap: 8px;
+    transition: background 0.1s;
+  }
+  .ctx-item:hover { background: var(--bg3); }
+  .ctx-item .ci-icon { font-size: 12px; width: 16px; }
+  .ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
+
+  /* LEGEND */
+  #legend {
+    position: fixed;
+    bottom: 16px; right: 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    z-index: 100;
+    font-size: 10px;
+  }
+  .leg-item { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; color: var(--muted); }
+  .leg-item:last-child { margin-bottom: 0; }
+  .leg-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* LOADING OVERLAY */
+  #api-loading {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 3000;
+    align-items: center; justify-content: center;
+    flex-direction: column; gap: 12px;
+  }
+  #api-loading.show { display: flex; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border2);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #api-loading p { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="logo">⬡ Pipeline</div>
+  <div class="sep"></div>
+  <button class="tb-btn" onclick="resetView()">Reset View</button>
+  <button class="tb-btn" onclick="autoLayout()">Auto Layout</button>
+  <div class="sep"></div>
+  <button class="tb-btn run" id="run-btn" onclick="runPipeline()">▶ Run Pipeline</button>
+  <div class="spacer"></div>
+  <div id="status-bar">Pronto — arraste os nós, conecte as portas</div>
+</div>
+
+<!-- CANVAS -->
+<div id="canvas-wrap" oncontextmenu="showCtxMenu(event)">
+  <div id="canvas">
+    <svg id="wires"></svg>
+    <!-- Nodes injetados via JS -->
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <span id="sidebar-title">Output</span>
+    <button id="sidebar-close" onclick="closeSidebar()">✕</button>
+  </div>
+  <div id="sidebar-content"></div>
+</div>
+
+<!-- MINIMAP -->
+<div id="minimap"><canvas id="mm-canvas"></canvas></div>
+
+<!-- LEGEND -->
+<div id="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:var(--blue)"></div>Texto</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--gold)"></div>JSON</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--purple)"></div>Imagem</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--green)"></div>Sinal</div>
+  <div class="leg-item"><div class="leg-dot" style="background:var(--red)"></div>Áudio</div>
+</div>
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu"></div>
+
+<!-- API LOADING -->
+<div id="api-loading">
+  <div class="spinner"></div>
+  <p id="loading-msg">Gerando roteiro...</p>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let scale = 0.72, ox = -60, oy = -20;
+let panDragging = false, panSX, panSY;
+let nodeDragging = null, nodeDX, nodeDY;
+let selectedNode = null;
+let nodeData = {};
+let connections = [];
+let runningNodes = new Set();
+let pipelineOutput = {};
+
+// ─── NODE DEFINITIONS ─────────────────────────────────────────────────────────
+const NODE_DEFS = [
+  {
+    id: 'n-input', cat: 'input', icon: '✏', type: 'Input',
+    name: 'Conteúdo Bruto', x: 40, y: 120,
+    fields: [
+      { key: 'content_type', label: 'Tipo', type: 'select',
+        options: ['texto', 'transcrição áudio', 'resumo artigo', 'ideia rápida'] },
+      { key: 'topic', label: 'Tema principal', type: 'input', placeholder: 'ex: TRT e risco cardiovascular' },
+      { key: 'raw_content', label: 'Conteúdo', type: 'textarea', rows: 4,
+        placeholder: 'Cole aqui o texto bruto, ideia ou contexto clínico...' },
+    ],
+    outs: [{ id: 'text-out', label: 'texto bruto', cls: 'port-text' }],
+  },
+  {
+    id: 'n-classify', cat: 'ai', icon: '◈', type: 'Claude AI',
+    name: 'Classificador', x: 360, y: 60,
+    fields: [],
+    ins:  [{ id: 'classify-in', label: 'texto bruto', cls: 'port-text' }],
+    outs: [{ id: 'classify-out', label: 'briefing JSON', cls: 'port-json' }],
+    preview: true,
+  },
+  {
+    id: 'n-generate', cat: 'ai', icon: '⚡', type: 'Claude AI',
+    name: 'Gerador de Roteiro', x: 680, y: 40,
+    fields: [
+      { key: 'slide_count', label: 'Nº de slides', type: 'select',
+        options: ['6', '7', '8', '9', '10'] },
+      { key: 'hook_variants', label: 'Variantes de hook', type: 'select',
+        options: ['1', '2', '3'] },
+    ],
+    ins:  [{ id: 'gen-in', label: 'briefing', cls: 'port-json' }],
+    outs: [{ id: 'gen-out', label: 'roteiro JSON', cls: 'port-json' }],
+    preview: true,
+    runnable: true,
+  },
+  {
+    id: 'n-caption', cat: 'ai', icon: '#', type: 'Claude AI',
+    name: 'Caption + Hashtags', x: 680, y: 340,
+    fields: [
+      { key: 'cta_type', label: 'CTA principal', type: 'select',
+        options: ['mentoria médicos', 'consulta paciente', 'ambos'] },
+    ],
+    ins:  [{ id: 'cap-in', label: 'briefing', cls: 'port-json' }],
+    outs: [{ id: 'cap-out', label: 'caption', cls: 'port-text' }],
+    preview: true,
+  },
+  {
+    id: 'n-template', cat: 'design', icon: '▣', type: 'Design',
+    name: 'Seletor de Template', x: 1000, y: 40,
+    fields: [
+      { key: 'template', label: 'Template base', type: 'select',
+        options: ['mito_fato', 'dado_científico', 'protocolo', 'educativo', 'comparação'] },
+      { key: 'accent', label: 'Cor de acento', type: 'input', placeholder: '#C8922A' },
+    ],
+    ins:  [{ id: 'tpl-in', label: 'roteiro JSON', cls: 'port-json' }],
+    outs: [{ id: 'tpl-out', label: 'slides config', cls: 'port-json' }],
+  },
+  {
+    id: 'n-render', cat: 'design', icon: '◉', type: 'Puppeteer',
+    name: 'Renderizador', x: 1000, y: 280,
+    fields: [
+      { key: 'format', label: 'Formato', type: 'select', options: ['1080×1350 (4:5)', '1080×1080 (1:1)'] },
+    ],
+    ins:  [
+      { id: 'rend-in1', label: 'slides config', cls: 'port-json' },
+      { id: 'rend-in2', label: 'caption', cls: 'port-text' },
+    ],
+    outs: [{ id: 'rend-out', label: 'imagens PNG', cls: 'port-image' }],
+    preview: true,
+  },
+  {
+    id: 'n-preview', cat: 'control', icon: '◎', type: 'Controle',
+    name: 'Preview + Aprovação', x: 1320, y: 160,
+    fields: [],
+    ins:  [
+      { id: 'prev-in1', label: 'imagens PNG', cls: 'port-image' },
+      { id: 'prev-in2', label: 'caption', cls: 'port-text' },
+    ],
+    outs: [{ id: 'prev-out', label: 'aprovado', cls: 'port-signal' }],
+    runnable: true,
+  },
+  {
+    id: 'n-publish', cat: 'publish', icon: '↑', type: 'Instagram',
+    name: 'Publicador', x: 1640, y: 160,
+    fields: [
+      { key: 'schedule', label: 'Agendar para', type: 'select',
+        options: ['agora', '07:00', '12:30', '19:00', 'personalizado'] },
+    ],
+    ins:  [{ id: 'pub-in', label: 'aprovado', cls: 'port-signal' }],
+    outs: [{ id: 'pub-out', label: 'publicado', cls: 'port-signal' }],
+  },
+];
+
+// ─── DEFAULT CONNECTIONS ──────────────────────────────────────────────────────
+const DEFAULT_CONNECTIONS = [
+  { from: 'text-out',    to: 'classify-in',  cls: 'wire-text'   },
+  { from: 'classify-out',to: 'gen-in',       cls: 'wire-json'   },
+  { from: 'classify-out',to: 'cap-in',       cls: 'wire-json'   },
+  { from: 'gen-out',     to: 'tpl-in',       cls: 'wire-json'   },
+  { from: 'tpl-out',     to: 'rend-in1',     cls: 'wire-json'   },
+  { from: 'cap-out',     to: 'rend-in2',     cls: 'wire-text'   },
+  { from: 'cap-out',     to: 'prev-in2',     cls: 'wire-text'   },
+  { from: 'rend-out',    to: 'prev-in1',     cls: 'wire-image'  },
+  { from: 'prev-out',    to: 'pub-in',       cls: 'wire-signal' },
+];
+
+// ─── BUILD NODES ──────────────────────────────────────────────────────────────
+function buildNodes() {
+  const canvas = document.getElementById('canvas');
+  NODE_DEFS.forEach(def => {
+    nodeData[def.id] = { x: def.x, y: def.y, fields: {} };
+    def.fields?.forEach(f => { nodeData[def.id].fields[f.key] = f.placeholder || f.options?.[0] || ''; });
+
+    const el = document.createElement('div');
+    el.className = `node cat-${def.cat}`;
+    el.id = def.id;
+    el.style.left = def.x + 'px';
+    el.style.top  = def.y + 'px';
+
+    let html = `
+      <div class="node-header">
+        <div class="node-icon">${def.icon}</div>
+        <div class="node-titles">
+          <div class="node-type">${def.type}</div>
+          <div class="node-name">${def.name}</div>
+        </div>
+        <div class="node-status"></div>
+      </div>
+      <div class="node-body">`;
+
+    // Input ports
+    def.ins?.forEach(p => {
+      html += `<div class="port-row">
+        <div class="port in ${p.cls}" id="p-${p.id}" data-port="${p.id}" data-node="${def.id}" data-dir="in"></div>
+        <span class="port-label">${p.label}</span>
+      </div>`;
+    });
+
+    // Fields
+    def.fields?.forEach(f => {
+      html += `<div class="node-field"><label>${f.label}</label>`;
+      if (f.type === 'textarea') {
+        html += `<textarea rows="${f.rows||3}" id="f-${def.id}-${f.key}" 
+          placeholder="${f.placeholder||''}" 
+          onchange="setField('${def.id}','${f.key}',this.value)"
+          onclick="event.stopPropagation()">${f.placeholder||''}</textarea>`;
+      } else if (f.type === 'select') {
+        html += `<select id="f-${def.id}-${f.key}" onchange="setField('${def.id}','${f.key}',this.value)" onclick="event.stopPropagation()">`;
+        f.options.forEach(o => { html += `<option>${o}</option>`; });
+        html += `</select>`;
+      } else {
+        html += `<input type="text" id="f-${def.id}-${f.key}"
+          placeholder="${f.placeholder||''}"
+          value="${f.placeholder||''}"
+          onchange="setField('${def.id}','${f.key}',this.value)"
+          onclick="event.stopPropagation()">`;
+      }
+      html += `</div>`;
+    });
+
+    // Preview
+    if (def.preview) {
+      html += `<div class="node-preview" id="prev-${def.id}">—</div>`;
+    }
+
+    // Run button
+    if (def.runnable) {
+      html += `<button class="node-run-btn" id="run-${def.id}" onclick="runNode('${def.id}',event)">▶ Executar nó</button>`;
+    }
+
+    // Output ports
+    def.outs?.forEach(p => {
+      html += `<div class="port-row out">
+        <span class="port-label">${p.label}</span>
+        <div class="port out ${p.cls}" id="p-${p.id}" data-port="${p.id}" data-node="${def.id}" data-dir="out"></div>
+      </div>`;
+    });
+
+    html += `</div>`;
+    el.innerHTML = html;
+    canvas.appendChild(el);
+    makeDraggable(el, def.id);
+  });
+
+  connections = [...DEFAULT_CONNECTIONS];
+  markConnected();
+  drawWires();
+}
+
+// ─── DRAGGABLE NODES ──────────────────────────────────────────────────────────
+function makeDraggable(el, id) {
+  el.addEventListener('mousedown', e => {
+    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT' ||
+        e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') return;
+    if (e.target.classList.contains('port')) return;
+    e.stopPropagation();
+    nodeDragging = { el, id };
+    const r = el.getBoundingClientRect();
+    nodeDX = (e.clientX - r.left) / scale;
+    nodeDY = (e.clientY - r.top) / scale;
+    document.querySelectorAll('.node').forEach(n => n.classList.remove('active'));
+    el.classList.add('active');
+    selectedNode = id;
+  });
+}
+
+// ─── PAN & ZOOM ───────────────────────────────────────────────────────────────
+const wrap = document.getElementById('canvas-wrap');
+const canvas = document.getElementById('canvas');
+
+function applyTransform() {
+  canvas.style.transform = `translate(${ox}px,${oy}px) scale(${scale})`;
+}
+applyTransform();
+
+wrap.addEventListener('mousedown', e => {
+  if (e.target.classList.contains('port')) return;
+  if (e.button !== 0) return;
+  panDragging = true;
+  panSX = e.clientX - ox;
+  panSY = e.clientY - oy;
+});
+
+window.addEventListener('mousemove', e => {
+  if (nodeDragging) {
+    const cx = (e.clientX - ox) / scale - nodeDX;
+    const cy = (e.clientY - oy) / scale - nodeDY;
+    nodeDragging.el.style.left = Math.max(0, cx) + 'px';
+    nodeDragging.el.style.top  = Math.max(0, cy) + 'px';
+    nodeData[nodeDragging.id].x = cx;
+    nodeData[nodeDragging.id].y = cy;
+    drawWires();
+    return;
+  }
+  if (panDragging) {
+    ox = e.clientX - panSX;
+    oy = e.clientY - panSY;
+    applyTransform();
+  }
+});
+
+window.addEventListener('mouseup', () => {
+  nodeDragging = null;
+  panDragging = false;
+});
+
+wrap.addEventListener('wheel', e => {
+  e.preventDefault();
+  const d = e.deltaY > 0 ? -0.06 : 0.06;
+  scale = Math.max(0.2, Math.min(2, scale + d));
+  applyTransform();
+}, { passive: false });
+
+function resetView() { scale = 0.72; ox = -60; oy = -20; applyTransform(); }
+
+function autoLayout() {
+  const positions = [
+    { id: 'n-input',    x: 40,   y: 120 },
+    { id: 'n-classify', x: 360,  y: 60  },
+    { id: 'n-generate', x: 680,  y: 40  },
+    { id: 'n-caption',  x: 680,  y: 340 },
+    { id: 'n-template', x: 1000, y: 40  },
+    { id: 'n-render',   x: 1000, y: 280 },
+    { id: 'n-preview',  x: 1320, y: 160 },
+    { id: 'n-publish',  x: 1640, y: 160 },
+  ];
+  positions.forEach(p => {
+    const el = document.getElementById(p.id);
+    el.style.left = p.x + 'px';
+    el.style.top  = p.y + 'px';
+    nodeData[p.id].x = p.x;
+    nodeData[p.id].y = p.y;
+  });
+  drawWires();
+}
+
+// ─── WIRES ────────────────────────────────────────────────────────────────────
+function portCenter(portId) {
+  const port = document.getElementById('p-' + portId);
+  if (!port) return null;
+  const nodeEl = port.closest('.node');
+  const nx = parseFloat(nodeEl.style.left);
+  const ny = parseFloat(nodeEl.style.top);
+  const nr = nodeEl.getBoundingClientRect();
+  const pr = port.getBoundingClientRect();
+  return {
+    x: nx + (pr.left - nr.left + pr.width / 2),
+    y: ny + (pr.top  - nr.top  + pr.height / 2),
+  };
+}
+
+function bezier(x1, y1, x2, y2) {
+  const cx = (x1 + x2) / 2;
+  return `M${x1},${y1} C${cx},${y1} ${cx},${y2} ${x2},${y2}`;
+}
+
+function drawWires() {
+  const svg = document.getElementById('wires');
+  svg.innerHTML = '';
+  connections.forEach(({ from, to, cls, active }) => {
+    const a = portCenter(from);
+    const b = portCenter(to);
+    if (!a || !b) return;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', bezier(a.x, a.y, b.x, b.y));
+    path.setAttribute('class', `wire ${cls}${active ? ' active animated' : ''}`);
+    svg.appendChild(path);
+  });
+}
+
+function markConnected() {
+  connections.forEach(({ from, to }) => {
+    const fp = document.getElementById('p-' + from);
+    const tp = document.getElementById('p-' + to);
+    if (fp) fp.classList.add('connected');
+    if (tp) tp.classList.add('connected');
+  });
+}
+
+// ─── FIELD STATE ──────────────────────────────────────────────────────────────
+function setField(nodeId, key, val) {
+  if (!nodeData[nodeId]) nodeData[nodeId] = { fields: {} };
+  nodeData[nodeId].fields[key] = val;
+}
+
+function getField(nodeId, key) {
+  return nodeData[nodeId]?.fields?.[key] || '';
+}
+
+// ─── STATUS ───────────────────────────────────────────────────────────────────
+function setStatus(msg) { document.getElementById('status-bar').textContent = msg; }
+
+function setNodeState(id, state) {
+  const el = document.getElementById(id);
+  el.classList.remove('running', 'done', 'error');
+  if (state) el.classList.add(state);
+}
+
+function setPreview(id, text) {
+  const el = document.getElementById('prev-' + id);
+  if (!el) return;
+  el.textContent = text.substring(0, 200) + (text.length > 200 ? '...' : '');
+  el.classList.add('has-data');
+}
+
+// ─── CLAUDE API ───────────────────────────────────────────────────────────────
+async function callClaude(systemPrompt, userMsg) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMsg }],
+    }),
+  });
+  const data = await res.json();
+  return data.content?.[0]?.text || '';
+}
+
+// ─── NODE EXECUTION ───────────────────────────────────────────────────────────
+async function executeNode(id) {
+  setNodeState(id, 'running');
+  connections.forEach(c => { if (c.from.startsWith(id.replace('n-','')) || c.to.includes(id.replace('n-',''))) c.active = true; });
+  drawWires();
+
+  try {
+    let result = '';
+
+    if (id === 'n-classify') {
+      const raw = getField('n-input', 'raw_content') || getField('n-input', 'topic');
+      const type = getField('n-input', 'content_type');
+      result = await callClaude(
+        `Você é um classificador de conteúdo médico para o Dr. Paulo Guimarães Jr., especialista em medicina hormonal, TRT e metabolismo.
+Retorne APENAS um JSON com: {"tema":"...","categoria":"TRT|Hormonal|Metabólico|Estilo de vida|Científico","publico":"médico|paciente|ambos","nivel_tecnico":"básico|intermediário|avançado","tipo_post":"mito_fato|dado_científico|protocolo|educativo|comparação","subtemas":["..."],"angulo_principal":"..."}`,
+        `Classifique este conteúdo (tipo: ${type}):\n\n${raw}`
+      );
+      setPreview('n-classify', result);
+      pipelineOutput['classify'] = result;
+    }
+
+    else if (id === 'n-generate') {
+      const briefing = pipelineOutput['classify'] || '{}';
+      const nSlides = getField('n-generate', 'slide_count') || '7';
+      result = await callClaude(
+        `Você é o gerador de roteiros de carrossel do Dr. Paulo Guimarães Jr., médico especialista em medicina hormonal, TRT (terapia de reposição de testosterona) e medicina metabólica. CRM-SC 21.698.
+
+Crie roteiros baseados em evidência científica real, com referências bibliográficas reais (autor, journal, ano).
+
+Tom: clínico, direto, sem rodeios, sem condescendência. Baseado em dados.
+
+Retorne APENAS um JSON válido:
+{
+  "hook_principal": "título impactante em caixa alta",
+  "hook_variantes": ["variante 2", "variante 3"],
+  "slides": [
+    {
+      "index": 1,
+      "type": "hook",
+      "eyebrow": "categoria em maiúsculas",
+      "titulo": "TÍTULO GRANDE",
+      "subtitulo": "frase que contextualiza sem entregar"
+    },
+    {
+      "index": 2,
+      "type": "indice",
+      "titulo": "O QUE VAMOS VER",
+      "items": ["item 1", "item 2", "item 3"]
+    },
+    {
+      "index": 3,
+      "type": "dado",
+      "label": "LABEL DO NÓ",
+      "numero": "valor grande",
+      "unidade": "contexto do número",
+      "corpo": "explicação do dado",
+      "referencia": "Autor et al., Journal, Ano"
+    }
+  ]
+}
+
+Gere ${nSlides} slides no total. O último slide deve ser sempre CTA com campos: salvar_frase, cta_medico, cta_paciente, assinatura.`,
+        `Briefing do conteúdo:\n${briefing}\n\nGere o roteiro completo.`
+      );
+      setPreview('n-generate', result);
+      pipelineOutput['roteiro'] = result;
+    }
+
+    else if (id === 'n-caption') {
+      const briefing = pipelineOutput['classify'] || '{}';
+      const cta = getField('n-caption', 'cta_type') || 'ambos';
+      result = await callClaude(
+        `Você escreve captions para Instagram do Dr. Paulo Guimarães Jr., especialista em medicina hormonal e TRT.
+
+Tom: direto, clínico, sem clichês motivacionais. Baseado em evidência.
+
+Retorne APENAS um JSON:
+{
+  "caption": "texto completo da legenda (máx 2200 chars)",
+  "hashtags": ["array com 20 hashtags segmentadas por nicho"]
+}
+
+CTA para incluir: ${cta}`,
+        `Briefing:\n${briefing}\n\nEscreva a caption e hashtags.`
+      );
+      setPreview('n-caption', result);
+      pipelineOutput['caption'] = result;
+    }
+
+    else if (id === 'n-preview') {
+      openSidebar();
+      renderSidebarPreview();
+      result = 'preview aberto';
+    }
+
+    connections.forEach(c => { c.active = false; });
+    setNodeState(id, 'done');
+    drawWires();
+    return result;
+
+  } catch (err) {
+    connections.forEach(c => { c.active = false; });
+    setNodeState(id, 'error');
+    drawWires();
+    setPreview(id, `Erro: ${err.message}`);
+    throw err;
+  }
+}
+
+// ─── RUN NODE (botão individual) ──────────────────────────────────────────────
+async function runNode(id, e) {
+  e.stopPropagation();
+  setStatus(`Executando ${id}...`);
+  showLoading(`Executando nó: ${id.replace('n-', '')}...`);
+  try {
+    await executeNode(id);
+    setStatus('Nó executado com sucesso.');
+  } catch(err) {
+    setStatus('Erro: ' + err.message);
+  }
+  hideLoading();
+}
+
+// ─── RUN PIPELINE ─────────────────────────────────────────────────────────────
+async function runPipeline() {
+  const btn = document.getElementById('run-btn');
+  btn.classList.add('running');
+  btn.textContent = '⟳ Rodando...';
+  pipelineOutput = {};
+
+  const steps = [
+    { id: 'n-classify', msg: 'Classificando conteúdo...' },
+    { id: 'n-generate', msg: 'Gerando roteiro...' },
+    { id: 'n-caption',  msg: 'Gerando caption e hashtags...' },
+  ];
+
+  for (const step of steps) {
+    setStatus(step.msg);
+    showLoading(step.msg);
+    try {
+      await executeNode(step.id);
+    } catch (err) {
+      setStatus('Pipeline pausado: ' + err.message);
+      hideLoading();
+      btn.classList.remove('running');
+      btn.textContent = '▶ Run Pipeline';
+      return;
+    }
+    hideLoading();
+    await new Promise(r => setTimeout(r, 400));
+  }
+
+  setStatus('Pipeline concluído — abrindo preview.');
+  openSidebar();
+  renderSidebarPreview();
+  btn.classList.remove('running');
+  btn.textContent = '▶ Run Pipeline';
+}
+
+// ─── SIDEBAR ──────────────────────────────────────────────────────────────────
+function openSidebar() { document.getElementById('sidebar').classList.add('open'); }
+function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); }
+
+function renderSidebarPreview() {
+  const el = document.getElementById('sidebar-content');
+  let html = '';
+
+  if (pipelineOutput.roteiro) {
+    try {
+      const rot = JSON.parse(pipelineOutput.roteiro);
+      html += `<h3>Roteiro gerado</h3>`;
+      rot.slides?.slice(0, 3).forEach(s => {
+        const bg = s.type === 'dado' ? '#1a1510' : '#0f0f0f';
+        html += `<div class="slide-thumb" style="background:${bg}">
+          <div class="s-label">${s.eyebrow || s.label || s.type}</div>
+          <div class="s-title">${s.titulo || s.numero || ''}</div>
+          <div class="s-body">${s.subtitulo || s.corpo || (s.items?.join(' · ')) || ''}</div>
+        </div>`;
+      });
+      if (rot.hook_variantes) {
+        html += `<h3>Variantes de hook</h3>`;
+        rot.hook_variantes.forEach(v => {
+          html += `<div class="output-display" style="margin-bottom:6px">${v}</div>`;
+        });
+      }
+    } catch(e) {
+      html += `<h3>Roteiro (raw)</h3><div class="output-display">${pipelineOutput.roteiro}</div>`;
+    }
+  }
+
+  if (pipelineOutput.caption) {
+    try {
+      const cap = JSON.parse(pipelineOutput.caption);
+      html += `<h3>Caption</h3><div class="output-display">${cap.caption || pipelineOutput.caption}</div>`;
+      if (cap.hashtags) {
+        html += `<h3>Hashtags</h3><div class="output-display">${cap.hashtags.join(' ')}</div>`;
+      }
+    } catch(e) {
+      html += `<h3>Caption</h3><div class="output-display">${pipelineOutput.caption}</div>`;
+    }
+  }
+
+  if (!html) html = '<p style="font-size:12px;color:var(--muted);margin-top:8px">Execute o pipeline primeiro.</p>';
+  el.innerHTML = html;
+}
+
+// ─── CONTEXT MENU ─────────────────────────────────────────────────────────────
+function showCtxMenu(e) {
+  e.preventDefault();
+  const menu = document.getElementById('ctx-menu');
+  menu.style.left = e.clientX + 'px';
+  menu.style.top  = e.clientY + 'px';
+  menu.style.display = 'block';
+  menu.innerHTML = `
+    <div class="ctx-item" onclick="autoLayout();hideCtx()"><span class="ci-icon">⊞</span>Auto Layout</div>
+    <div class="ctx-item" onclick="resetView();hideCtx()"><span class="ci-icon">⌖</span>Reset View</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" onclick="runPipeline();hideCtx()"><span class="ci-icon">▶</span>Run Pipeline</div>
+    <div class="ctx-item" onclick="openSidebar();renderSidebarPreview();hideCtx()"><span class="ci-icon">◎</span>Ver Preview</div>
+  `;
+}
+function hideCtx() { document.getElementById('ctx-menu').style.display = 'none'; }
+window.addEventListener('click', hideCtx);
+
+// ─── LOADING ──────────────────────────────────────────────────────────────────
+function showLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg;
+  document.getElementById('api-loading').classList.add('show');
+}
+function hideLoading() { document.getElementById('api-loading').classList.remove('show'); }
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+buildNodes();
+drawWires();
+setStatus('Pipeline pronto. Preencha o nó de Input e clique em Run Pipeline.');
+</script>
+</body>
+</html>

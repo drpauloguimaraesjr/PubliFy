@@ -2,10 +2,12 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 
 const generateRoute = require('./routes/generate');
 const renderRoute = require('./routes/render');
 const carouselRoute = require('./routes/carousel');
+const pipelineRoute = require('./routes/pipeline');
 
 const app = express();
 
@@ -14,7 +16,7 @@ app.use(express.json({ limit: '10mb' }));
 
 const { version } = require('../package.json');
 
-app.get('/', (_req, res) => {
+app.get('/api', (_req, res) => {
   res.json({
     name: 'PubliFy API',
     status: 'ok',
@@ -29,6 +31,10 @@ app.get('/health', (_req, res) => {
 app.use('/api/generate', generateRoute);
 app.use('/api/render', renderRoute);
 app.use('/api/carousel', carouselRoute);
+app.use('/api/pipeline', pipelineRoute);
+
+// Serve canvas UI (public/index.html) at root
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 app.use((err, _req, res, _next) => {
   console.error('[error]', err);
