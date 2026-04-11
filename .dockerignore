@@ -9,3 +9,7 @@ output/
 serviceAccount.json
 *.md
 .DS_Store
+
+# Frontend — deployed separately to Vercel
+public/
+pipeline/
