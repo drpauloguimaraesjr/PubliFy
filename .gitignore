@@ -1,0 +1,29 @@
+node_modules/
+
+# Secrets
+.env
+.env.*
+!.env.example
+serviceAccount.json
+*.pem
+*.key
+
+# Build output / runtime artifacts
+dist/
+build/
+output/
+.vercel
+.firebase
+firebase-debug.log
+.railway-vars.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
