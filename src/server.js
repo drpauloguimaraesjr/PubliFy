@@ -12,11 +12,13 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+const { version } = require('../package.json');
+
 app.get('/', (_req, res) => {
   res.json({
     name: 'PubliFy API',
     status: 'ok',
-    version: '0.1.0',
+    version,
   });
 });
 
