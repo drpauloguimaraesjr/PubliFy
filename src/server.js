@@ -7,6 +7,7 @@ const generateRoute = require('./routes/generate');
 const renderRoute = require('./routes/render');
 const carouselRoute = require('./routes/carousel');
 const pipelineRoute = require('./routes/pipeline');
+const knowledgeRoute = require('./routes/knowledge');
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use('/api/generate', generateRoute);
 app.use('/api/render', renderRoute);
 app.use('/api/carousel', carouselRoute);
 app.use('/api/pipeline', pipelineRoute);
+app.use('/api/knowledge', knowledgeRoute);
 
 app.use((err, _req, res, _next) => {
   console.error('[error]', err);

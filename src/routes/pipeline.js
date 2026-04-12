@@ -4,6 +4,7 @@ const { renderCarousel } = require('../services/renderer');
 const { uploadCarouselSlides } = require('../services/storage');
 const { createCarousel, updateCarousel } = require('../services/firestore');
 const { normalizeSlides } = require('../utils/normalizeSlide');
+const { searchArticles, formatReferencesForPrompt } = require('../services/knowledge');
 
 const router = express.Router();
 
@@ -22,15 +23,32 @@ router.post('/classify', async (req, res, next) => {
 });
 
 // POST /api/pipeline/script — briefing → roteiro (slides + hook_variants)
+// Enriquece o prompt com referências reais da knowledge base antes de gerar.
 router.post('/script', async (req, res, next) => {
   try {
     const { briefing, slide_count } = req.body || {};
     if (!briefing || typeof briefing !== 'object') {
       return res.status(400).json({ error: 'Field "briefing" (object) required.' });
     }
-    const result = await generateScript(briefing, { slide_count });
-    const script = { ...result.data, slides: normalizeSlides(result.data.slides) };
-    res.json({ script, usage: result.usage });
+
+    // RAG: busca artigos verificados relacionados ao tema
+    const searchQuery = briefing.topic || briefing.main_angle || '';
+    let articles = [];
+    let referencesContext = '';
+    try {
+      articles = await searchArticles(searchQuery, 5);
+      referencesContext = formatReferencesForPrompt(articles);
+    } catch (err) {
+      console.warn('[pipeline/script] knowledge search failed, continuing without RAG:', err.message);
+    }
+
+    const result = await generateScript(briefing, { slide_count, referencesContext });
+    const script = {
+      ...result.data,
+      slides: normalizeSlides(result.data.slides),
+      _knowledge_articles: articles.length,
+    };
+    res.json({ script, usage: result.usage, knowledge_articles_found: articles.length });
   } catch (err) {
     next(err);
   }

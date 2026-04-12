@@ -74,7 +74,10 @@ async function classifyInput(rawInput, contentType) {
 }
 
 async function generateScript(briefing, options = {}) {
-  return callClaudeJson(SCRIPT_PROMPT, buildScriptUser(briefing, options), 4096);
+  const systemPrompt = options.referencesContext
+    ? SCRIPT_PROMPT + options.referencesContext
+    : SCRIPT_PROMPT;
+  return callClaudeJson(systemPrompt, buildScriptUser(briefing, options), 4096);
 }
 
 async function generateCaption(briefing, script, options = {}) {
