@@ -12,12 +12,22 @@ function escape(str) {
     .replace(/"/g, '&quot;');
 }
 
-function wrap(bodyHtml) {
+function isValidHex(c) {
+  return typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c);
+}
+
+function buildAccentOverride(options) {
+  if (!options || !isValidHex(options.accent)) return '';
+  return `:root { --gold: ${options.accent}; --gold-dark: ${options.accent}; }`;
+}
+
+function wrap(bodyHtml, options = {}) {
+  const override = buildAccentOverride(options);
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<style>${BASE_CSS}</style>
+<style>${BASE_CSS}${override}</style>
 </head>
 <body>
 ${bodyHtml}
@@ -25,7 +35,7 @@ ${bodyHtml}
 </html>`;
 }
 
-function renderHook(slide) {
+function renderHook(slide, options) {
   const titleClass = slide.title && slide.title.length > 24 ? 'title medium' : 'title';
   return wrap(`
     <div class="slide light">
@@ -36,10 +46,10 @@ function renderHook(slide) {
       <div class="spacer"></div>
       <div class="brand-mark">DR. PAULO GUIMARÃES JR.</div>
     </div>
-  `);
+  `, options);
 }
 
-function renderData(slide) {
+function renderData(slide, options) {
   return wrap(`
     <div class="slide dark">
       ${slide.eyebrow ? `<div class="eyebrow">${escape(slide.eyebrow)}</div>` : ''}
@@ -53,10 +63,10 @@ function renderData(slide) {
       ${slide.reference ? `<p class="reference">📖 ${escape(slide.reference)}</p>` : ''}
       <div class="brand-mark">DR. PAULO GUIMARÃES JR.</div>
     </div>
-  `);
+  `, options);
 }
 
-function renderBody(slide) {
+function renderBody(slide, options) {
   const isDark = slide.background === 'dark';
   return wrap(`
     <div class="slide ${isDark ? 'dark' : 'light'}">
@@ -68,14 +78,14 @@ function renderBody(slide) {
       ${slide.reference ? `<p class="reference">📖 ${escape(slide.reference)}</p>` : ''}
       <div class="brand-mark">DR. PAULO GUIMARÃES JR.</div>
     </div>
-  `);
+  `, options);
 }
 
-function renderComparison(slide) {
+function renderComparison(slide, options) {
   const cols = slide.columns || { left: { heading: '', points: [] }, right: { heading: '', points: [] } };
   const renderPoints = (points = []) =>
     points.map(p => `<li style="font-size:22px;line-height:1.5;margin-bottom:18px;font-weight:500;list-style:none;padding-left:24px;position:relative;">
-      <span style="position:absolute;left:0;color:#C8922A;font-weight:900;">›</span>${escape(p)}
+      <span style="position:absolute;left:0;color:var(--gold);font-weight:900;">›</span>${escape(p)}
     </li>`).join('');
 
   return wrap(`
@@ -88,7 +98,7 @@ function renderComparison(slide) {
           <div class="eyebrow" style="font-size:14px;margin-bottom:20px;">${escape(cols.left?.heading || '')}</div>
           <ul style="padding:0;margin:0;">${renderPoints(cols.left?.points)}</ul>
         </div>
-        <div style="width:3px;background:#C8922A;border-radius:2px;"></div>
+        <div style="width:3px;background:var(--gold);border-radius:2px;"></div>
         <div style="flex:1;">
           <div class="eyebrow" style="font-size:14px;margin-bottom:20px;">${escape(cols.right?.heading || '')}</div>
           <ul style="padding:0;margin:0;">${renderPoints(cols.right?.points)}</ul>
@@ -96,10 +106,10 @@ function renderComparison(slide) {
       </div>
       <div class="brand-mark">DR. PAULO GUIMARÃES JR.</div>
     </div>
-  `);
+  `, options);
 }
 
-function renderCta(slide) {
+function renderCta(slide, options) {
   return wrap(`
     <div class="slide dark">
       ${slide.eyebrow ? `<div class="eyebrow">${escape(slide.eyebrow)}</div>` : ''}
@@ -113,7 +123,7 @@ function renderCta(slide) {
           </div>
         ` : ''}
         ${slide.cta_paciente ? `
-          <div style="border-top:2px solid #C8922A;padding-top:24px;">
+          <div style="border-top:2px solid var(--gold);padding-top:24px;">
             <div class="eyebrow" style="font-size:14px;margin-bottom:12px;">PACIENTE</div>
             <p class="body-text" style="color:#E8E8E8;font-size:22px;">${escape(slide.cta_paciente)}</p>
           </div>
@@ -125,17 +135,17 @@ function renderCta(slide) {
         </div>
       </div>
     </div>
-  `);
+  `, options);
 }
 
-function renderSlideHtml(slide) {
+function renderSlideHtml(slide, options = {}) {
   switch (slide.type) {
-    case 'hook':       return renderHook(slide);
-    case 'data':       return renderData(slide);
-    case 'comparison': return renderComparison(slide);
-    case 'cta':        return renderCta(slide);
+    case 'hook':       return renderHook(slide, options);
+    case 'data':       return renderData(slide, options);
+    case 'comparison': return renderComparison(slide, options);
+    case 'cta':        return renderCta(slide, options);
     case 'body':
-    default:           return renderBody(slide);
+    default:           return renderBody(slide, options);
   }
 }
 

@@ -572,7 +572,7 @@ const NODE_DEFS = [
     fields: [
       { key: 'template', label: 'Template base', type: 'select',
         options: ['mito_fato', 'dado_científico', 'protocolo', 'educativo', 'comparação'] },
-      { key: 'accent', label: 'Cor de acento', type: 'input', placeholder: '#C8922A' },
+      { key: 'accent', label: 'Cor de acento', type: 'input', placeholder: '#C8922A', default: '#C8922A' },
     ],
     ins:  [{ id: 'tpl-in', label: 'roteiro JSON', cls: 'port-json' }],
     outs: [{ id: 'tpl-out', label: 'slides config', cls: 'port-json' }],
@@ -632,7 +632,8 @@ function buildNodes() {
   NODE_DEFS.forEach(def => {
     nodeData[def.id] = { x: def.x, y: def.y, fields: {} };
     def.fields?.forEach(f => {
-      if (f.type === 'select') nodeData[def.id].fields[f.key] = f.options?.[0] || '';
+      if (f.default !== undefined) nodeData[def.id].fields[f.key] = f.default;
+      else if (f.type === 'select') nodeData[def.id].fields[f.key] = f.options?.[0] || '';
       else nodeData[def.id].fields[f.key] = '';
     });
 
@@ -677,6 +678,7 @@ function buildNodes() {
       } else {
         html += `<input type="text" id="f-${def.id}-${f.key}"
           placeholder="${f.placeholder||''}"
+          value="${f.default||''}"
           oninput="setField('${def.id}','${f.key}',this.value)"
           onmousedown="event.stopPropagation()"
           onclick="event.stopPropagation()">`;
@@ -932,11 +934,16 @@ async function executeNode(id) {
     }
 
     else if (id === 'n-template') {
-      // Nó local: apenas anota o template escolhido nos slides (cosmético).
+      // Valida e anota template_config (accent color é aplicado no render real).
       if (!pipelineOutput.script) throw new Error('Execute o Gerador primeiro.');
       const tpl = getField('n-template', 'template');
-      const accent = getField('n-template', 'accent') || '#C8922A';
+      let accent = (getField('n-template', 'accent') || '').trim();
+      if (!accent) accent = '#C8922A';
+      if (!/^#[0-9a-fA-F]{6}$/.test(accent)) {
+        throw new Error('Cor de acento inválida. Use formato hex de 6 dígitos (ex: #C8922A).');
+      }
       pipelineOutput.template_config = { template: tpl, accent };
+      setPreview('n-template', tpl + ' · accent ' + accent);
       result = 'Template: ' + tpl;
     }
 
@@ -944,10 +951,17 @@ async function executeNode(id) {
       if (!pipelineOutput.script) throw new Error('Execute o Gerador primeiro.');
       const data = await callBackend('/api/pipeline/render-upload', {
         slides: pipelineOutput.script.slides,
+        briefing: pipelineOutput.briefing,
+        script: pipelineOutput.script,
+        caption: pipelineOutput.caption,
+        hashtags: pipelineOutput.hashtags,
+        template_config: pipelineOutput.template_config,
+        input: getField('n-input', 'raw_content') || getField('n-input', 'topic'),
       });
       pipelineOutput.carousel_id = data.carousel_id;
       pipelineOutput.slide_urls = data.slide_urls;
-      setPreview('n-render', (data.slide_urls?.length || 0) + ' slides renderizados');
+      pipelineOutput.carousel = data.carousel;
+      setPreview('n-render', (data.slide_urls?.length || 0) + ' slides · id ' + data.carousel_id.substring(0, 8));
     }
 
     else if (id === 'n-preview') {

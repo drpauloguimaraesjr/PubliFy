@@ -2,6 +2,8 @@ const express = require('express');
 const { classifyInput, generateScript, generateCaption } = require('../services/claude');
 const { renderCarousel } = require('../services/renderer');
 const { uploadCarouselSlides } = require('../services/storage');
+const { createCarousel, updateCarousel } = require('../services/firestore');
+const { normalizeSlides } = require('../utils/normalizeSlide');
 
 const router = express.Router();
 
@@ -27,7 +29,8 @@ router.post('/script', async (req, res, next) => {
       return res.status(400).json({ error: 'Field "briefing" (object) required.' });
     }
     const result = await generateScript(briefing, { slide_count });
-    res.json({ script: result.data, usage: result.usage });
+    const script = { ...result.data, slides: normalizeSlides(result.data.slides) };
+    res.json({ script, usage: result.usage });
   } catch (err) {
     next(err);
   }
@@ -47,17 +50,67 @@ router.post('/caption', async (req, res, next) => {
   }
 });
 
-// POST /api/pipeline/render-upload — slides → PNGs → Firebase Storage
+// POST /api/pipeline/render-upload — slides → PNGs → Storage + Firestore
+// Aceita contexto completo (briefing, script, caption, hashtags, template_config)
+// e persiste tudo em Firestore. Retorna o carousel_id REAL do doc criado.
 router.post('/render-upload', async (req, res, next) => {
   try {
-    const { slides, carousel_id } = req.body || {};
-    if (!Array.isArray(slides) || slides.length === 0) {
-      return res.status(400).json({ error: 'Field "slides" must be a non-empty array.' });
+    const {
+      slides,
+      briefing,
+      script,
+      caption,
+      hashtags,
+      template_config,
+      input,
+    } = req.body || {};
+
+    const slidesToRender = normalizeSlides(slides || script?.slides);
+    if (!slidesToRender.length) {
+      return res.status(400).json({ error: 'Field "slides" (or "script.slides") must be a non-empty array.' });
     }
-    const id = carousel_id || `draft_${Date.now()}`;
-    const rendered = await renderCarousel(slides);
-    const urls = await uploadCarouselSlides(id, rendered);
-    res.json({ carousel_id: id, slide_urls: urls });
+
+    // 1. Cria doc Firestore com status "rendering" (ID real)
+    const carouselDoc = await createCarousel({
+      topic:         briefing?.topic           ?? script?.topic         ?? null,
+      category:      briefing?.category        ?? null,
+      audience:      briefing?.audience        ?? null,
+      technical_level: briefing?.technical_level ?? null,
+      post_type:     briefing?.post_type       ?? null,
+      main_angle:    briefing?.main_angle      ?? null,
+      hook_variants: script?.hook_variants     ?? [],
+      slides:        slidesToRender,
+      caption:       caption                   ?? null,
+      hashtags:      hashtags                  ?? [],
+      template_config: template_config         ?? null,
+      raw_input:     input                     ?? null,
+      status: 'rendering',
+    });
+
+    // 2. Renderiza (com accent color se template_config tiver)
+    const renderOptions = {};
+    if (template_config?.accent) renderOptions.accent = template_config.accent;
+    const rendered = await renderCarousel(slidesToRender, renderOptions);
+
+    // 3. Upload Firebase Storage usando ID REAL (não mais draft_)
+    const urls = await uploadCarouselSlides(carouselDoc.id, rendered);
+
+    // 4. Mescla URLs nos slides e atualiza status → draft (revisão)
+    const slidesWithUrls = slidesToRender.map(s => {
+      const match = urls.find(u => u.index === s.index);
+      return { ...s, image_url: match?.url ?? null };
+    });
+
+    const updated = await updateCarousel(carouselDoc.id, {
+      slides: slidesWithUrls,
+      status: 'draft',
+    });
+
+    res.json({
+      carousel_id: carouselDoc.id,
+      slide_urls: urls,
+      carousel: updated,
+    });
   } catch (err) {
     next(err);
   }
