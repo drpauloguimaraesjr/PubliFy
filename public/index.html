@@ -1032,9 +1032,8 @@ async function runPipeline() {
     await new Promise(r => setTimeout(r, 400));
   }
 
-  setStatus('Pipeline concluído — abrindo preview.');
-  openSidebar();
-  renderSidebarPreview();
+  setStatus('Pipeline concluído. Clique em ◎ Preview quando quiser ver o resultado.');
+  renderSidebarPreview(); // prepara conteúdo, não abre
   btn.classList.remove('running');
   btn.textContent = '▶ Run Pipeline';
 }

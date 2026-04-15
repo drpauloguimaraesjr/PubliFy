@@ -413,10 +413,7 @@ async function reRenderAll() {
   }
 }
 
-// Keyboard
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeDetail();
-});
+// Painel lateral só fecha clicando no X — sem Escape, sem click-fora.
 
 // Init
 loadCarousels();
